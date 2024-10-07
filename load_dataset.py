@@ -11,6 +11,7 @@ LABELS = {0: "Mild_Demented",
           2: "Non_Demented",
           3: "Very_Mild_Demented"}
 
+
 def get_images_from_indexes(dataset: DatasetDict, indexes) -> list[NDArray]:
     list_images = []
     pillow_images = dataset[indexes]['image']
