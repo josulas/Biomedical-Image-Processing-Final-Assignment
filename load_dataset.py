@@ -1,7 +1,6 @@
 from datasets import load_dataset, DatasetDict
 import numpy as np
 from numpy.typing import NDArray
-import matplotlib.pyplot as plt
 
 
 TRAIN_DATASET = load_dataset('Falah/Alzheimer_MRI', split='train')
@@ -34,6 +33,7 @@ def get_elements_from_indexes(dataset: DatasetDict, indexes) -> list[(NDArray, i
 
 
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
     # Print the number of examples and the first few samples
     length = len(TRAIN_DATASET)
     n_show = 4

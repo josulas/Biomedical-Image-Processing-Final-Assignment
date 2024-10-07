@@ -80,7 +80,6 @@ def erosion(img: ArrayLike, structuring_element: ArrayLike, mode: str = 'same') 
     @param img: ArrayLike containing integer values, only 1s and 0s
     @param structuring_element: ArrayLike containing integer values, only 1s, 0s and NaNs
     @param mode: Mode of operation, 'same' or 'valid'
-
     """
     return _iterate_over_image(img, structuring_element, mode, fit)
 
