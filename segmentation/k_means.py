@@ -136,8 +136,8 @@ def kmeans(arr: ArrayLike, k: int = 2, best_labels: ArrayLike | None = None,
             centers = init_centers()
         # Until convergence
         iteration_index = 0
-        previous_centers = centers.copy()
         while True:
+            previous_centers = centers.copy()
             distances, labels = _k_means_step(centers)
             if termination(centers, previous_centers, iteration_index):
                 break
