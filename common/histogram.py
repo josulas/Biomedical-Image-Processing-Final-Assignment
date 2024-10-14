@@ -80,7 +80,7 @@ def plot_hist(hist: ImgHist, **kwargs):
     if 'figure' not in kwargs:
         kwargs['figure'], kwargs['ax'] = plt.subplots(figsize=kwargs['figsize'])
     if 'color' not in kwargs:
-        kwargs['color'] = next(kwargs['ax']._get_lines.prop_cycler)['color']
+        kwargs['color'] = kwargs['ax']._get_lines.get_next_color()
     if 'alpha' not in kwargs:
         kwargs['alpha'] = 1
     if 'legend' not in kwargs:
