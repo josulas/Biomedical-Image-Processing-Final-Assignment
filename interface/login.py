@@ -1,8 +1,9 @@
 import streamlit as st
 import os
 import sqlite3
+import pandas as pd
 
-# Simulamos una base de datos de usuarios
+# base de datos de doctores
 USER_DATA = {
     "1": "1",
     "doctor2@example.com": "securepass456"
@@ -14,8 +15,8 @@ if 'logged_in' not in st.session_state:
 
 # Función para mostrar la página de login
 def login_page():
-    st.image('/Users/sofia/Downloads/mri.jpg', use_column_width=True)
-    st.title("Bienvenidx Doctor/a!!")
+    st.image('/Users/sofia/Downloads/mri.jpg', use_column_width=True) #nose como editar esto para que lo tengan toodos
+    st.title("Bienvenidx Doctor/a!!") 
 
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
@@ -88,14 +89,19 @@ def mostrar_paciente():
     conn = sqlite3.connect('pacientes.db')
     c = conn.cursor()
 
-    c.execute("SELECT first_name, last_name FROM users")
+    c.execute("SELECT first_name, last_name, dni, email FROM users")
     rows = c.fetchall()
+
     if rows:
-        for row in rows:
-            st.write(f"Nombre: {row[0]}, Apellido: {row[1]}")
+        df = pd.DataFrame(
+            rows,
+            columns=["Nombre", "Apellido", "DNI", "Email"]
+        )
+
+        st.dataframe(df, hide_index=True)
+
     else:
         st.write("No hay usuarios registrados aún.")
-
 
 
 
