@@ -1,7 +1,13 @@
 import streamlit as st
+import sys
 import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import sqlite3
 import pandas as pd
+import cv2
+from segmentation.k_means import kmeans, KmeansFlags, KmeansTermCrit, KmeansTermOpt
+import numpy as np
+
 
 # base de datos de doctores
 USER_DATA = {
@@ -34,7 +40,7 @@ def login_page():
 
 
 def subir_imagen(filename):
-    upload_folder = "images_database"
+    upload_folder = r"interface/images_database"
     if not os.path.exists(upload_folder):
         os.makedirs(upload_folder)
 
@@ -48,20 +54,21 @@ def subir_imagen(filename):
         if filename:
             # Leer la imagen
             bytes_data = uploaded_file.getvalue()
-
+            global file_path
             file_path = os.path.join(upload_folder, filename + extension) 
+
             with open(file_path, "wb") as f:
                 f.write(bytes_data)
 
-            st.write(f"🙌🏼 ✅ Puedes encontrar la imagen en: {file_path}")
-            st.image(file_path)
+            st.write(f"🙌🏼 ✅ Su imagen ha sido subida con éxito")
+            #st.image(file_path)
         else:
             st.warning("Por favor, ingrese un nombre para la imagen.")
 
 
 def alta_paciente(name, lastname, DNI, email,doctor):
     # Conectar a la base de datos (se creará automáticamente si no existe)
-    conn = sqlite3.connect('pacientes.db')
+    conn = sqlite3.connect(r'interface/pacientes.db')
     c = conn.cursor()
 
     # Crear la tabla si no existe
@@ -86,7 +93,7 @@ def alta_paciente(name, lastname, DNI, email,doctor):
  
 
 def mostrar_paciente():
-    conn = sqlite3.connect('pacientes.db')
+    conn = sqlite3.connect(r'interface/pacientes.db')
     c = conn.cursor()
 
     c.execute("SELECT first_name, last_name, dni, email FROM users")
@@ -103,9 +110,25 @@ def mostrar_paciente():
     else:
         st.write("No hay usuarios registrados aún.")
 
+def menu_results(option):
+    if option == "Segmentación Manual":
+        k_means= st.toggle("Segmentar con K-means")
+        grey_matter= st.toggle("Calcular proporción materia gris")
+        white_matter= st.toggle("Calcular proporción materia blanca")
+        if st.button("Segmentar!"):
+            img= cv2.imread(file_path)
+            compactness, labels, centers= kmeans(img.flatten(), 3,attempts=5)
+            centers = centers.astype(np.uint8)
+            segmented_kmeans = centers[labels].reshape(img.shape)
 
+            img_segmented= cv2.imwrite(r'interface/images_database/prueba.png', segmented_kmeans)
+            st.image(img_segmented)
 
-# Guardo datos del paciente para habilitar el resto
+    
+    elif option == "Clasificador Super ultra fast y pro":
+        st.write('capooooo')
+
+# Guardo datos del paciente para habilitar el resto 
 if 'paciente_guardado' not in st.session_state:
     st.session_state.paciente_guardado = False
     st.session_state.archivo = None
@@ -114,8 +137,12 @@ def menu_page():
     tab1, tab2, tab3, tab4 = st.tabs(["🏠 Inicio", "👥 Agregar Paciente", "🔎 Buscar Paciente", " 📊 Ver Resultados"])
 
     with tab1:
-        tab1.subheader(f"Bienvenido Doctor!!👩🏻‍⚕️👨🏻‍⚕️")
-        tab1.markdown("Elija la **opción correspondiente** para comenzar con las actividades")
+        tab1.header(":blue[Bienvenido Doctor!!]👩🏻‍⚕️👨🏻‍⚕️")
+        tab1.markdown("Elija la :blue[**opción correspondiente**] para comenzar con las actividades:")
+        tab1.markdown("""El primer paso es cargar los datos del paciente en :orange[**"agregar paciente"**] para darlo de alta y después *subir la imagen*.<br><br>
+                      Luego en la pestaña de :orange[**"buscar pacientes"**] se pueden hallar los que ya fueron ingresados.<br><br>
+                      Para analizar la imágen se debe dirigir a la pestaña de :orange[**"ver resultados"**] donde hallará las diferentes opciones para analizar la imagen ingresada
+                      """, unsafe_allow_html=True)
 
     with tab2:
         tab2.subheader("Alta de pacientes")
@@ -129,10 +156,10 @@ def menu_page():
 
         # Botón para guardar datos del paciente
         if st.button("Guardar Paciente"):
-            if name and lastname and DNI and email and doctor:
+            if name and lastname and DNI and email and doctor: #todos los datos completos
                 # Guardamos datos del paciente
                 alta_paciente(name, lastname, DNI, email, doctor)
-                archivo = f"{name}_{lastname}"
+                archivo = f"{lastname}_{DNI}"
                 st.session_state.archivo = archivo
                 st.session_state.paciente_guardado = True  # Marcamos que el paciente fue guardado
                 st.success("Paciente agregado exitosamente. Ahora puedes subir la imagen.")
@@ -145,6 +172,10 @@ def menu_page():
 
     with tab3:
         mostrar_paciente()
+    with tab4:
+        option = tab4.radio("Selecciona una opción para proceder con el análisis de la imágen", ("Segmentación Manual", "Clasificador Super ultra fast y pro"))
+        menu_results(option)
+
 
 if st.session_state.logged_in:
     menu_page()
