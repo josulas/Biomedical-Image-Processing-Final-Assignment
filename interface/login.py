@@ -7,7 +7,7 @@ import pandas as pd
 import cv2
 from segmentation.k_means import kmeans, KmeansFlags, KmeansTermCrit, KmeansTermOpt
 import numpy as np
-
+import matplotlib.pyplot as plt
 
 # base de datos de doctores
 USER_DATA = {
@@ -110,19 +110,54 @@ def mostrar_paciente():
     else:
         st.write("No hay usuarios registrados aún.")
 
+def draw_grayscale_image(image, ax):
+    ax.imshow(image, cmap='gray', vmin=0, vmax=255)
+    ax.axis('off')
+
 def menu_results(option):
     if option == "Segmentación Manual":
         k_means= st.toggle("Segmentar con K-means")
         grey_matter= st.toggle("Calcular proporción materia gris")
         white_matter= st.toggle("Calcular proporción materia blanca")
+
         if st.button("Segmentar!"):
             img= cv2.imread(file_path)
             compactness, labels, centers= kmeans(img.flatten(), 3,attempts=5)
             centers = centers.astype(np.uint8)
             segmented_kmeans = centers[labels].reshape(img.shape)
+            sorted_centers = sorted(centers)
+            background_idx = np.argmax(centers == sorted_centers[0])
+            grey_matter_idx = np.argmax(centers == sorted_centers[1])
+            white_matter_idx = np.argmax(centers == sorted_centers[2])
+            segmented_white_matter = np.where(segmented_kmeans == centers[white_matter_idx], 1, 0)
+            segmented_grey_matter = np.where(segmented_kmeans == centers[grey_matter_idx], 1, 0)
+            segmented_background = np.where(segmented_kmeans == centers[background_idx], 1, 0)
 
-            img_segmented= cv2.imwrite(r'interface/images_database/prueba.png', segmented_kmeans)
-            st.image(img_segmented)
+            if k_means:
+                if 'fig_kmeans' in globals():
+                    plt.close('Kmeans results')
+
+                fig_kmeans, axs_kmeans = plt.subplots(2, 2, num='Kmeans results')
+                draw_grayscale_image(segmented_kmeans, axs_kmeans[0][0])
+                draw_grayscale_image(segmented_white_matter * 255, axs_kmeans[0][1])
+                draw_grayscale_image(segmented_grey_matter * 255, axs_kmeans[1][0])
+                draw_grayscale_image(segmented_background * 255, axs_kmeans[1][1])
+                fig_kmeans.tight_layout()
+                st.pyplot(fig_kmeans)
+
+            elif grey_matter:
+                fig_grey_matter, ax_grey = plt.subplots()
+                draw_grayscale_image(segmented_grey_matter * 255, ax_grey)
+                st.pyplot(fig_grey_matter)
+
+            elif white_matter:
+                fig_white_matter, ax_white = plt.subplots()
+                draw_grayscale_image(segmented_white_matter * 255, ax_white)
+                st.pyplot(fig_white_matter)
+
+                path, ext= os.path.splitext(file_path)
+                new_path=f"{path}_seg{ext}"
+                img_segmented= cv2.imwrite(new_path, segmented_kmeans)
 
     
     elif option == "Clasificador Super ultra fast y pro":
