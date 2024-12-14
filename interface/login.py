@@ -8,6 +8,8 @@ import cv2
 from segmentation.k_means import kmeans, KmeansFlags, KmeansTermCrit, KmeansTermOpt
 import numpy as np
 import matplotlib.pyplot as plt
+from streamlit_drawable_canvas import st_canvas
+from PIL import Image
 
 # base de datos de doctores
 USER_DATA = {
@@ -117,8 +119,17 @@ def draw_grayscale_image(image, ax):
 def menu_results(option):
     if option == "Segmentación Manual":
         k_means= st.toggle("Segmentar con K-means")
-        grey_matter= st.toggle("Calcular proporción materia gris")
-        white_matter= st.toggle("Calcular proporción materia blanca")
+        ratio= st.toggle("Calcular proporción materia gris sobre materia blanca")
+
+        st.markdown(
+    """
+    <div style="background-color: #f0f8ff; padding: 15px; border-radius: 10px; border: 1px solid #d6e9f7;">
+        <h4>💡 Por qué puede ser interesante?</h4>
+        <p style="margin: 0;">En condiciones normales, la proporción entre sustancia gris (40%) sobre sustancia blanca (60%) en el cerebro es aproximadamente del 66,6%. En pacientes con Alzheimer, esta proporción disminuye progresivamente debido a la atrofia de la sustancia gris y la degeneración de la sustancia blanca. La reducción de esta relación se asocia con un mayor grado de demencia y deterioro cognitivo, ya que afecta funciones clave como la memoria, el razonamiento y las habilidades para realizar tareas diarias. Este marcador puede utilizarse como indicador del avance de la enfermedad mediante estudios de neuroimagen.</p>
+    </div>
+    """,
+    unsafe_allow_html=True)
+        st.write("  ")
 
         if st.button("Segmentar!"):
             img= cv2.imread(file_path)
@@ -132,6 +143,15 @@ def menu_results(option):
             segmented_white_matter = np.where(segmented_kmeans == centers[white_matter_idx], 1, 0)
             segmented_grey_matter = np.where(segmented_kmeans == centers[grey_matter_idx], 1, 0)
             segmented_background = np.where(segmented_kmeans == centers[background_idx], 1, 0)
+            proportion= np.round(np.sum(segmented_grey_matter)/np.sum(segmented_white_matter) , 3)
+            porcentaje_gris= np.round(np.sum(segmented_grey_matter)*100/(np.sum(segmented_grey_matter)+np.sum(segmented_white_matter)) , 2)
+            
+
+            if ratio:
+                st.text("El resultado de la proporción materia gris/ materia blanca es:")
+                st.code(proportion, 'plaintext')
+                st.text("El porcentaje de materia gris (%) es:")
+                st.code(porcentaje_gris, 'plaintext')
 
             if k_means:
                 if 'fig_kmeans' in globals():
@@ -145,23 +165,26 @@ def menu_results(option):
                 fig_kmeans.tight_layout()
                 st.pyplot(fig_kmeans)
 
-            elif grey_matter:
-                fig_grey_matter, ax_grey = plt.subplots()
-                draw_grayscale_image(segmented_grey_matter * 255, ax_grey)
-                st.pyplot(fig_grey_matter)
-
-            elif white_matter:
-                fig_white_matter, ax_white = plt.subplots()
-                draw_grayscale_image(segmented_white_matter * 255, ax_white)
-                st.pyplot(fig_white_matter)
-
-                path, ext= os.path.splitext(file_path)
-                new_path=f"{path}_seg{ext}"
-                img_segmented= cv2.imwrite(new_path, segmented_kmeans)
+            path, ext= os.path.splitext(file_path)
+            new_path=f"{path}_seg{ext}"
+            img_segmented= cv2.imwrite(new_path, segmented_kmeans)
 
     
     elif option == "Clasificador Super ultra fast y pro":
-        st.write('capooooo')
+
+        image = Image.open(file_path)
+        st.write("Dibuje la region que deseas segmentar:")
+        canvas_result = st_canvas(fill_color="rgba(255, 0, 0, 0.3)", stroke_width=2, stroke_color="red", background_image=image,height=image.height, width=image.width, drawing_mode="freedraw",key="canvas")
+
+        if canvas_result.image_data is not None:
+            st.image(canvas_result.image_data, caption="Segmentación manual", use_column_width=True)
+            canvas_image = Image.fromarray((canvas_result.image_data).astype("uint8"))
+           
+            path, ext= os.path.splitext(file_path)
+            new_path=f"{path}_manualseg{ext}"
+            canvas_image.save(new_path)
+
+
 
 # Guardo datos del paciente para habilitar el resto 
 if 'paciente_guardado' not in st.session_state:
@@ -178,6 +201,7 @@ def menu_page():
                       Luego en la pestaña de :orange[**"buscar pacientes"**] se pueden hallar los que ya fueron ingresados.<br><br>
                       Para analizar la imágen se debe dirigir a la pestaña de :orange[**"ver resultados"**] donde hallará las diferentes opciones para analizar la imagen ingresada
                       """, unsafe_allow_html=True)
+        
 
     with tab2:
         tab2.subheader("Alta de pacientes")
