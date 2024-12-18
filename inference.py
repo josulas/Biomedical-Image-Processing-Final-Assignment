@@ -3,14 +3,14 @@ from segmentation.k_means import kmeans, KmeansFlags, KmeansTermCrit, KmeansTerm
 from improving.filtering import conv2d
 import cv2
 from numpy.typing import NDArray, ArrayLike
-import torch
 from torch import nn, optim
 import torch.nn.functional as functional
+import torch
+import platform
 
+MODEL_PATH = 'model_cpu.pth'
 
-MODEL_PATH = 'model.pth'
-
-PREDICTED_POWER= [100,100,100,100]
+PREDICTION_POWER = [100, 100, 100, 100] # Manually added
 
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, downsample=False):
@@ -102,25 +102,48 @@ class CustomResNet18(nn.Module):
             param.requires_grad = requires_grad
 
 
+def setup_device():
+    if platform.system() == "Windows":
+        # For Windows, use torch_directml if available
+        try:
+            import torch_directml
+            device = torch_directml.device()
+        except ImportError:
+            # Fallback to CPU if torch_directml is not installed
+            device = torch.device("cpu")
+    elif platform.system() == "Darwin":
+        # For macOS, use MPS (Metal Performance Shaders) if available, otherwise CPU
+        if torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
+    else:
+        # Fallback for other platforms
+        device = torch.device("cpu")
+    return device
+
+
 class MainModel(nn.Module):
     def __init__(self, lr=1e-3, beta1=0.9, beta2=0.999):
         super().__init__()
-        self.net = CustomResNet18()
+        self.device = setup_device()
+        self.net = CustomResNet18().to(self.device)
         self.criterion = nn.CrossEntropyLoss()
         self.opt = optim.Adam(self.net.parameters(), lr=lr, betas=(beta1, beta2))
         self.input = None
         self.target = None
         self.prediction = None
         self.ce_loss = None
+
     def set_requires_grad(self, requires_grad=True):
         for p in self.net.parameters():
             p.requires_grad = requires_grad
     def setup_input(self, data):
-        data = torch.tensor(data)
+        data = torch.tensor(data).to(self.device)
         self.input = data[0]
         self.target = data[1]
     def setup_input_no_label(self, data):
-        self.input = torch.tensor(data)
+        self.input = torch.tensor(data).to(self.device)
     def forward(self):
         self.prediction = self.net(self.input)
     def backward(self):
@@ -139,7 +162,14 @@ def build_and_load_model_from_state(path: str = MODEL_PATH):
     import warnings
     warnings.filterwarnings("ignore", category=FutureWarning)
     model = MainModel()
-    model.load_state_dict(torch.load(path))
+    # serialization.add_safe_globals([
+    #     torch._utils._rebuild_device_tensor_from_numpy,
+    #     np.core.multiarray._reconstruct,
+    #     np.ndarray,
+    #     _codecs.encode,
+    #     np.dtype
+    # ])
+    model.load_state_dict(torch.load(path, weights_only=True))
     return model
 
 
@@ -192,12 +222,16 @@ if __name__ == '__main__':
     from sklearn.metrics import classification_report
     dataset_dict = load_dataset(**TEST_DATASET)
     length = len(dataset_dict)
-    n_test = 100
+    n_test = length
     sample_indexes = np.random.choice(length, n_test, replace=False)
     sample = get_elements_from_indexes(dataset_dict, sample_indexes)
     images = [element[0] for element in sample]
     labels = np.array([element[1] for element in sample])
     classifier = build_and_load_model_from_state()
+    # classifier = classifier.to("cpu")
+    # torch.save(classifier.state_dict(), "model_cpu.pth")
+    # print(classifier.device)
+
     inputs = pre_process_image(images)
     prediction = predict(classifier, inputs)
     report = classification_report(labels, prediction)
