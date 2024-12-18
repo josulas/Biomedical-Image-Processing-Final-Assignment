@@ -8,7 +8,7 @@ import cv2
 from segmentation.k_means import kmeans, KmeansFlags, KmeansTermCrit, KmeansTermOpt
 import numpy as np
 import matplotlib.pyplot as plt
-from dataset import get_elements_from_indexes, TRAIN_DATASET, LABELS
+from dataset import get_elements_from_indexes, load_dataset, TEST_DATASET, LABELS
 from improving.filtering import conv2d
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
@@ -17,7 +17,7 @@ from inference import build_and_load_model_from_state, pre_process_image, predic
 if "confirmo" not in st.session_state: #variable global para la visualizacion de los resultados
     st.session_state.confirmo = None 
 
-image_file_path= None
+image_file_path = None
 # base de datos de doctores
 USER_DATA = {
     "1": "1",
@@ -225,14 +225,12 @@ def menu_results(option):
                 segmentada.save(f"{path}_manualseg{ext}")
 
     elif option == "Clasificador Avanzado":
-        st.subheader("Clasificador de grado de avance con CNN", anchor= "prediction", divider= 'grey')
+        st.subheader("Clasificador de grado de avance de demencia con CNN", anchor= "prediction", divider= 'grey')
         advanced_model= build_and_load_model_from_state()
         img = cv2.imread(image_file_path, cv2.IMREAD_GRAYSCALE)
         inputs = pre_process_image([img])
-        prediction = predict(advanced_model, inputs)
-        print(prediction)
-        accuracy = 0.9 # presicion la tome que va entre 0 y 1, no me acuerdo si estaba en porcentaje
-        st.metric(label="Predicción", value= prediction) # prediction puede ser un str tambien tipo esta LOCO
+        prediction = predict(advanced_model, inputs)[0]
+        accuracy = PREDICTION_POWER[prediction]
         if 0.5 <= accuracy <0.7:
             color= "orange"
         elif accuracy >= 0.7 : 
@@ -240,8 +238,8 @@ def menu_results(option):
         elif accuracy < 0.5:
             color = "red"
         st.warning("La predicción se realiza por medio de una red neurnal convolucional del tipo ResNet 18 y debe ser utilizado con discresión y criterio de un profesional. Es solo a modo de guía.", icon="🚨")
-        st.write(f"Según nuestros cálculos, el paciente tiene un **caso de demencia**: **:{color}-background[{LABELS[prediction]}]**")
-        st.write(f"**Dicho valor fue calculado con una presición del: :{color}[{accuracy*100}%]** ")
+        st.write(f"Según el clasificador, el paciente tiene un **caso de demencia**: **:{color}-background[{LABELS[prediction]}]**")
+        st.write(f"**Dicho valor fue calculado con una precisión del: :{color}[{accuracy:.1f}%]** ")
 
 
 # INICIOOOOOO

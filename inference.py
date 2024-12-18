@@ -7,10 +7,11 @@ from torch import nn, optim
 import torch.nn.functional as functional
 import torch
 import platform
+import numpy as np
 
 MODEL_PATH = 'model_cpu.pth'
 
-PREDICTION_POWER = [100, 100, 100, 100] # Manually added
+PREDICTION_POWER = np.array([0.99404762, 1., 0.98589342, 0.98257081]) * 100
 
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, downsample=False):
@@ -228,12 +229,15 @@ if __name__ == '__main__':
     images = [element[0] for element in sample]
     labels = np.array([element[1] for element in sample])
     classifier = build_and_load_model_from_state()
-    # classifier = classifier.to("cpu")
-    # torch.save(classifier.state_dict(), "model_cpu.pth")
-    # print(classifier.device)
-
     inputs = pre_process_image(images)
     prediction = predict(classifier, inputs)
     report = classification_report(labels, prediction)
     print(f"Model performance over {n_test} random images from the validation set:")
     print(report)
+    # Predictive Power calculation
+    prediction = np.array(prediction)
+    correctly_classified = np.array([np.sum((labels == i) & (prediction == i)) for i in range(4)])
+    total_per_class = np.array([np.sum(prediction == i) for i in range(4)])
+    predictive_power = correctly_classified / total_per_class
+    print("Predictive Power:")
+    print(predictive_power)

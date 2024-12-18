@@ -62,15 +62,13 @@ if __name__ == '__main__':
     save_path = r"interface/images_database"
     entire_test_collection = get_elements_from_indexes(dataset_dict, np.arange(length))
     counts = {}
+    n_per_class = 3
     for label in LABELS:
         counts[label] = 0
     for index in range(length):
-        if counts[entire_test_collection[index][1]] < 2:
+        if counts[entire_test_collection[index][1]] < n_per_class:
             counts[entire_test_collection[index][1]] += 1
             filename = os.path.join(save_path, f"{LABELS[entire_test_collection[index][1]]}_{counts[entire_test_collection[index][1]]}.png")
             Image.fromarray(entire_test_collection[index][0], "L").save(filename)
-    image = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
-    print(image.shape)
-
     input()
 
