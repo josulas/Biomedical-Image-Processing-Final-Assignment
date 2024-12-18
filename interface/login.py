@@ -69,7 +69,7 @@ def subir_imagen(filename):
                 f.write(bytes_data)
 
             st.write(f"🙌🏼 ✅ Su imagen ha sido subida con éxito")
-            st.write(image_file_path)
+            
         else:
             st.warning("Por favor, ingrese un nombre para la imagen.")
 
