@@ -168,3 +168,4 @@ pre_processed_dataset/
 
 # Segmentation Results db
 images_results/
+pacientes.db

@@ -12,6 +12,10 @@ from dataset import get_elements_from_indexes, TRAIN_DATASET, LABELS
 from improving.filtering import conv2d
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
+from inference import build_and_load_model_from_state, pre_process_image, predict, PREDICTION_POWER
+
+if "confirmo" not in st.session_state: #variable global para la visualizacion de los resultados
+    st.session_state.confirmo = None 
 
 image_file_path= None
 # base de datos de doctores
@@ -46,7 +50,7 @@ def login_page():
 
 def subir_imagen(filename):
     global image_file_path
-    upload_folder = r"interface/images_database"
+    upload_folder = r"interface/images_results"
     if not os.path.exists(upload_folder):
         os.makedirs(upload_folder)
 
@@ -131,8 +135,9 @@ def filter(imagen):
 
 
 def menu_results(option):
-    st.write(image_file_path)
+
     if option == "Segmentación Automática":
+        st.subheader("Segmentación Automática con K-means", anchor= "seg_autom", divider= 'grey')
         k_means= st.toggle("Segmentar con K-means")
         ratio= st.toggle("Calcular proporción materia gris sobre materia blanca")
 
@@ -142,8 +147,7 @@ def menu_results(option):
         <h4>💡 Por qué puede ser interesante?</h4>
         <p style="margin: 0;">En condiciones normales, la proporción entre sustancia gris (40%) sobre sustancia blanca (60%) en el cerebro es aproximadamente del 66,6%. En pacientes con Alzheimer, esta proporción disminuye progresivamente debido a la atrofia de la sustancia gris y la degeneración de la sustancia blanca. La reducción de esta relación se asocia con un mayor grado de demencia y deterioro cognitivo, ya que afecta funciones clave como la memoria, el razonamiento y las habilidades para realizar tareas diarias. Este marcador puede utilizarse como indicador del avance de la enfermedad mediante estudios de neuroimagen.</p>
     </div>
-    """,
-    unsafe_allow_html=True)
+    """,unsafe_allow_html=True)
         st.write("  ")
     
         if st.button("Segmentar!"):
@@ -189,11 +193,12 @@ def menu_results(option):
     
     elif option == "Segmentación Manual (draw)":
         if image_file_path is not None:
-            image = Image.open(image_file_path)
+            image_og = Image.open(image_file_path)
+            image = image_og.resize((4*image_og.width, 4*image_og.height), Image.Resampling.LANCZOS)
             st.subheader("Dibuje y pinte la region que desee segmentar:", anchor= "seg_man", divider= 'grey')
             
             lapiz = st.slider("Selecciona el grosor del trazo:", min_value=3, max_value=50, value=20)
-            canvas_result = st_canvas(fill_color="rgba(255, 0, 0, 0.3)", stroke_width=lapiz, stroke_color="red", background_image=image,height=image.height, width=image.width, drawing_mode="freedraw",key="canvas")
+            canvas_result = st_canvas(fill_color="rgba(255, 0, 0, 0.3)", stroke_width=lapiz, stroke_color="red", background_image=image, height=image.height, width=image.width, drawing_mode="freedraw",key="canvas")
 
             if canvas_result.image_data is not None:
                 st.image(canvas_result.image_data, caption="Segmentación manual", use_column_width=True)
@@ -204,18 +209,40 @@ def menu_results(option):
                 new_path=f"{path}_mask{ext}"
                 canvas_image.save(new_path)
 
-                mascara = np.array(canvas_result.image_data[:, :, 3]) 
+                mascara = np.array(canvas_result.image_data[:, :, 3]) # el 3 es las transparencia
                 mascara_bin = np.where(mascara > 0, 255, 0).astype("uint8") 
             
             
-                original_array = np.array(image)
-                segmentada = np.copy(original_array)
-                segmentada[mascara_bin == 0] = 0 
+                image_array = np.array(image.convert("RGBA"))
+                segmentada = np.copy(image_array)
+                
+                segmentada[:, :, 3] = mascara_bin  # Canal Alfa de la máscara
+
+                # Mostrar y guardar la imagen segmentada
+                segmentada = Image.fromarray(segmentada, "RGBA")
                 st.image(segmentada, caption="Imagen segmentada", use_column_width=True)
-                segmentada= cv2.imwrite(f"{path}_manualseg{ext}", segmentada)
+                #segmentada = Image.fromarray((segmentada * 255).astype("uint8"))
+                segmentada.save(f"{path}_manualseg{ext}")
 
     elif option == "Clasificador Avanzado":
-       st.write("hola") 
+        st.subheader("Clasificador de grado de avance con CNN", anchor= "prediction", divider= 'grey')
+        advanced_model= build_and_load_model_from_state()
+        img = cv2.imread(image_file_path, cv2.IMREAD_GRAYSCALE)
+        inputs = pre_process_image([img])
+        prediction = predict(advanced_model, inputs)
+        print(prediction)
+        accuracy = 0.9 # presicion la tome que va entre 0 y 1, no me acuerdo si estaba en porcentaje
+        st.metric(label="Predicción", value= prediction) # prediction puede ser un str tambien tipo esta LOCO
+        if 0.5 <= accuracy <0.7:
+            color= "orange"
+        elif accuracy >= 0.7 : 
+            color= "green"
+        elif accuracy < 0.5:
+            color = "red"
+        st.warning("La predicción se realiza por medio de una red neurnal convolucional del tipo ResNet 18 y debe ser utilizado con discresión y criterio de un profesional. Es solo a modo de guía.", icon="🚨")
+        st.write(f"Según nuestros cálculos, el paciente tiene un **caso de demencia**: **:{color}-background[{LABELS[prediction]}]**")
+        st.write(f"**Dicho valor fue calculado con una presición del: :{color}[{accuracy*100}%]** ")
+
 
 # INICIOOOOOO
 if 'paciente_guardado' not in st.session_state:
@@ -246,13 +273,15 @@ def menu_page():
 
         # Botón para guardar datos del paciente
         if st.button("Guardar Paciente"):
-            if name and lastname and DNI and email and doctor: #todos los datos completos
+            if name and lastname and DNI and email and doctor and DNI.isdigit(): #todos los datos completos
                 # Guardamos datos del paciente
                 alta_paciente(name, lastname, DNI, email, doctor)
                 archivo = f"{lastname}_{DNI}"
                 st.session_state.archivo = archivo
                 st.session_state.paciente_guardado = True  # Marcamos que el paciente fue guardado
                 st.success("Paciente agregado exitosamente. Ahora puedes subir la imagen.")
+            elif not DNI.isdigit():
+                st.error("El DNI debe ser un número entero válido.")
             else:
                 st.warning("Por favor, complete todos los datos antes de guardar.")
 
@@ -262,9 +291,22 @@ def menu_page():
 
     with tab3:
         mostrar_paciente()
+
     with tab4:
+
         option = tab4.radio("Selecciona una opción para proceder con el análisis de la imágen", ("Segmentación Manual (draw)", "Segmentación Automática","Clasificador Avanzado"))
-        menu_results(option)
+        confirmar = tab4.button("Confirmar selección")
+
+        if confirmar:
+            st.success(f"Procesando...")
+            st.session_state.confirmo= option
+    
+
+        if st.session_state.confirmo == option:
+            menu_results(st.session_state.confirmo)
+        else:
+            st.info("Confirme la selección para proceder.")
+            
 
 
 if st.session_state.logged_in:
