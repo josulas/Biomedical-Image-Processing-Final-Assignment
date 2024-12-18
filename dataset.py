@@ -42,6 +42,7 @@ if __name__ == '__main__':
     from PIL import Image
     import matplotlib.pyplot as plt
     import os
+    import cv2
     # Print the number of examples and the first few samples
     dataset_dict = load_dataset(**TEST_DATASET)
     length = len(dataset_dict)
@@ -68,6 +69,7 @@ if __name__ == '__main__':
             counts[entire_test_collection[index][1]] += 1
             filename = os.path.join(save_path, f"{LABELS[entire_test_collection[index][1]]}_{counts[entire_test_collection[index][1]]}.png")
             Image.fromarray(entire_test_collection[index][0], "L").save(filename)
-
+    image = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+    print(image.shape)
 
 
