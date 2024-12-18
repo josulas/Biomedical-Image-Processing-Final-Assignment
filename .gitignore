@@ -167,4 +167,4 @@ checkpoints/
 pre_processed_dataset/
 
 # Segmentation Results db
-image_results/
+images_results/
