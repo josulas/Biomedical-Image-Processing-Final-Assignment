@@ -170,21 +170,32 @@ def menu_results(option):
             img_segmented= cv2.imwrite(new_path, segmented_kmeans)
 
     
-    elif option == "Clasificador Super ultra fast y pro":
+    elif option == "Segmentación Manual (draw)":
 
         image = Image.open(file_path)
-        st.write("Dibuje la region que deseas segmentar:")
-        canvas_result = st_canvas(fill_color="rgba(255, 0, 0, 0.3)", stroke_width=2, stroke_color="red", background_image=image,height=image.height, width=image.width, drawing_mode="freedraw",key="canvas")
+        st.subheader("Dibuje y pinte la region que desee segmentar:", anchor= "seg_man", divider= 'grey')
+        
+        lapiz = st.slider("Selecciona el grosor del trazo:", min_value=3, max_value=50, value=20)
+        canvas_result = st_canvas(fill_color="rgba(255, 0, 0, 0.3)", stroke_width=lapiz, stroke_color="red", background_image=image,height=image.height, width=image.width, drawing_mode="freedraw",key="canvas")
 
         if canvas_result.image_data is not None:
             st.image(canvas_result.image_data, caption="Segmentación manual", use_column_width=True)
             canvas_image = Image.fromarray((canvas_result.image_data).astype("uint8"))
            
+           #guardamos el dibujo
             path, ext= os.path.splitext(file_path)
-            new_path=f"{path}_manualseg{ext}"
+            new_path=f"{path}_mask{ext}"
             canvas_image.save(new_path)
 
-
+            mascara = np.array(canvas_result.image_data[:, :, 3]) 
+            mascara_bin = np.where(mascara > 0, 255, 0).astype("uint8") 
+        
+        
+            original_array = np.array(image)
+            segmentada = np.copy(original_array)
+            segmentada[mascara_bin == 0] = 0 
+            st.image(segmentada, caption="Imagen segmentada", use_column_width=True)
+            segmentada= cv2.imwrite(f"{path}_manualseg{ext}", segmentada)
 
 # Guardo datos del paciente para habilitar el resto 
 if 'paciente_guardado' not in st.session_state:
@@ -232,7 +243,7 @@ def menu_page():
     with tab3:
         mostrar_paciente()
     with tab4:
-        option = tab4.radio("Selecciona una opción para proceder con el análisis de la imágen", ("Segmentación Manual", "Clasificador Super ultra fast y pro"))
+        option = tab4.radio("Selecciona una opción para proceder con el análisis de la imágen", ("Segmentación Manual (draw)", "Segmentación Automática","Clasificador de Avance con CNN"))
         menu_results(option)
 
 
