@@ -72,4 +72,5 @@ if __name__ == '__main__':
     image = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
     print(image.shape)
 
+    input()
 

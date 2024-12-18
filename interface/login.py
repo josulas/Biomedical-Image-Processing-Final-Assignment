@@ -8,9 +8,12 @@ import cv2
 from segmentation.k_means import kmeans, KmeansFlags, KmeansTermCrit, KmeansTermOpt
 import numpy as np
 import matplotlib.pyplot as plt
+from dataset import get_elements_from_indexes, TRAIN_DATASET, LABELS
+from improving.filtering import conv2d
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 
+image_file_path= None
 # base de datos de doctores
 USER_DATA = {
     "1": "1",
@@ -23,7 +26,7 @@ if 'logged_in' not in st.session_state:
 
 # Función para mostrar la página de login
 def login_page():
-    st.image('/Users/sofia/Downloads/mri.jpg', use_column_width=True) #nose como editar esto para que lo tengan toodos
+    st.image('mri.jpg', use_column_width=True)
     st.title("Bienvenidx Doctor/a!!") 
 
     email = st.text_input("Email")
@@ -56,14 +59,13 @@ def subir_imagen(filename):
         if filename:
             # Leer la imagen
             bytes_data = uploaded_file.getvalue()
-            global file_path
-            file_path = os.path.join(upload_folder, filename + extension) 
+            image_file_path = os.path.join(upload_folder, filename + extension) 
 
-            with open(file_path, "wb") as f:
+            with open(image_file_path, "wb") as f:
                 f.write(bytes_data)
 
             st.write(f"🙌🏼 ✅ Su imagen ha sido subida con éxito")
-            #st.image(file_path)
+            #st.image(image_file_path)
         else:
             st.warning("Por favor, ingrese un nombre para la imagen.")
 
@@ -116,8 +118,20 @@ def draw_grayscale_image(image, ax):
     ax.imshow(image, cmap='gray', vmin=0, vmax=255)
     ax.axis('off')
 
+def filter(imagen):
+
+    epsilon = 0.1 
+    sigma = 3
+    gaussianDim = int(np.ceil(np.sqrt(-2 * sigma ** 2 * np.log(epsilon * sigma * np.sqrt(2 * np.pi)))))
+    gaussianKernel1D = cv2.getGaussianKernel(gaussianDim, sigma)
+    gaussianKernel = np.outer(gaussianKernel1D, gaussianKernel1D)
+    filtered_image = conv2d(imagen, gaussianKernel)
+
+    return filtered_image
+
+
 def menu_results(option):
-    if option == "Segmentación Manual":
+    if option == "Segmentación Automática":
         k_means= st.toggle("Segmentar con K-means")
         ratio= st.toggle("Calcular proporción materia gris sobre materia blanca")
 
@@ -132,7 +146,10 @@ def menu_results(option):
         st.write("  ")
 
         if st.button("Segmentar!"):
-            img= cv2.imread(file_path)
+
+            img = cv2.imread(image_file_path)
+            #print(img.shape)
+            #img = filter(img)
             compactness, labels, centers= kmeans(img.flatten(), 3,attempts=5)
             centers = centers.astype(np.uint8)
             segmented_kmeans = centers[labels].reshape(img.shape)
@@ -165,39 +182,39 @@ def menu_results(option):
                 fig_kmeans.tight_layout()
                 st.pyplot(fig_kmeans)
 
-            path, ext= os.path.splitext(file_path)
+            path, ext= os.path.splitext(image_file_path)
             new_path=f"{path}_seg{ext}"
             img_segmented= cv2.imwrite(new_path, segmented_kmeans)
 
     
     elif option == "Segmentación Manual (draw)":
+        if image_file_path is not None:
+            image = Image.open(image_file_path)
+            st.subheader("Dibuje y pinte la region que desee segmentar:", anchor= "seg_man", divider= 'grey')
+            
+            lapiz = st.slider("Selecciona el grosor del trazo:", min_value=3, max_value=50, value=20)
+            canvas_result = st_canvas(fill_color="rgba(255, 0, 0, 0.3)", stroke_width=lapiz, stroke_color="red", background_image=image,height=image.height, width=image.width, drawing_mode="freedraw",key="canvas")
 
-        image = Image.open(file_path)
-        st.subheader("Dibuje y pinte la region que desee segmentar:", anchor= "seg_man", divider= 'grey')
-        
-        lapiz = st.slider("Selecciona el grosor del trazo:", min_value=3, max_value=50, value=20)
-        canvas_result = st_canvas(fill_color="rgba(255, 0, 0, 0.3)", stroke_width=lapiz, stroke_color="red", background_image=image,height=image.height, width=image.width, drawing_mode="freedraw",key="canvas")
+            if canvas_result.image_data is not None:
+                st.image(canvas_result.image_data, caption="Segmentación manual", use_column_width=True)
+                canvas_image = Image.fromarray((canvas_result.image_data).astype("uint8"))
+            
+            #guardamos el dibujo
+                path, ext= os.path.splitext(image_file_path)
+                new_path=f"{path}_mask{ext}"
+                canvas_image.save(new_path)
 
-        if canvas_result.image_data is not None:
-            st.image(canvas_result.image_data, caption="Segmentación manual", use_column_width=True)
-            canvas_image = Image.fromarray((canvas_result.image_data).astype("uint8"))
-           
-           #guardamos el dibujo
-            path, ext= os.path.splitext(file_path)
-            new_path=f"{path}_mask{ext}"
-            canvas_image.save(new_path)
+                mascara = np.array(canvas_result.image_data[:, :, 3]) 
+                mascara_bin = np.where(mascara > 0, 255, 0).astype("uint8") 
+            
+            
+                original_array = np.array(image)
+                segmentada = np.copy(original_array)
+                segmentada[mascara_bin == 0] = 0 
+                st.image(segmentada, caption="Imagen segmentada", use_column_width=True)
+                segmentada= cv2.imwrite(f"{path}_manualseg{ext}", segmentada)
 
-            mascara = np.array(canvas_result.image_data[:, :, 3]) 
-            mascara_bin = np.where(mascara > 0, 255, 0).astype("uint8") 
-        
-        
-            original_array = np.array(image)
-            segmentada = np.copy(original_array)
-            segmentada[mascara_bin == 0] = 0 
-            st.image(segmentada, caption="Imagen segmentada", use_column_width=True)
-            segmentada= cv2.imwrite(f"{path}_manualseg{ext}", segmentada)
-
-# Guardo datos del paciente para habilitar el resto 
+# INICIOOOOOO
 if 'paciente_guardado' not in st.session_state:
     st.session_state.paciente_guardado = False
     st.session_state.archivo = None
