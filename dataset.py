@@ -57,17 +57,5 @@ if __name__ == '__main__':
     fig.suptitle('Sample Images')
     fig.tight_layout()
     fig.show()
-    # Save two of each type
-    save_path = r"interface/images_database"
-    entire_test_collection = get_elements_from_indexes(dataset_dict, np.arange(length))
-    counts = {}
-    for label in LABELS:
-        counts[label] = 0
-    for index in range(length):
-        if counts[entire_test_collection[index][1]] < 2:
-            counts[entire_test_collection[index][1]] += 1
-            filename = os.path.join(save_path, f"{LABELS[entire_test_collection[index][1]]}_{counts[entire_test_collection[index][1]]}.png")
-            Image.fromarray(entire_test_collection[index][0], "L").save(filename)
-
-
+    input()
 
