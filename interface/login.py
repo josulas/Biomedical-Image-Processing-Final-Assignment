@@ -45,11 +45,11 @@ def login_page():
 
 
 def subir_imagen(filename):
+    global image_file_path
     upload_folder = r"interface/images_database"
     if not os.path.exists(upload_folder):
         os.makedirs(upload_folder)
 
-    # Cargar la imagen aquí
     uploaded_file = st.file_uploader("Elija la imagen del paciente correspondiente:", type=["png", "jpg", "jpeg"])
 
     if uploaded_file is not None:
@@ -60,12 +60,12 @@ def subir_imagen(filename):
             # Leer la imagen
             bytes_data = uploaded_file.getvalue()
             image_file_path = os.path.join(upload_folder, filename + extension) 
-
+            
             with open(image_file_path, "wb") as f:
                 f.write(bytes_data)
 
             st.write(f"🙌🏼 ✅ Su imagen ha sido subida con éxito")
-            #st.image(image_file_path)
+            st.write(image_file_path)
         else:
             st.warning("Por favor, ingrese un nombre para la imagen.")
 
@@ -131,6 +131,7 @@ def filter(imagen):
 
 
 def menu_results(option):
+    st.write(image_file_path)
     if option == "Segmentación Automática":
         k_means= st.toggle("Segmentar con K-means")
         ratio= st.toggle("Calcular proporción materia gris sobre materia blanca")
@@ -144,12 +145,11 @@ def menu_results(option):
     """,
     unsafe_allow_html=True)
         st.write("  ")
-
+    
         if st.button("Segmentar!"):
+            img = cv2.imread(image_file_path, cv2.IMREAD_GRAYSCALE)
 
-            img = cv2.imread(image_file_path)
-            #print(img.shape)
-            #img = filter(img)
+            img = filter(img) #filtramos
             compactness, labels, centers= kmeans(img.flatten(), 3,attempts=5)
             centers = centers.astype(np.uint8)
             segmented_kmeans = centers[labels].reshape(img.shape)
@@ -214,6 +214,9 @@ def menu_results(option):
                 st.image(segmentada, caption="Imagen segmentada", use_column_width=True)
                 segmentada= cv2.imwrite(f"{path}_manualseg{ext}", segmentada)
 
+    elif option == "Clasificador Avanzado":
+       st.write("hola") 
+
 # INICIOOOOOO
 if 'paciente_guardado' not in st.session_state:
     st.session_state.paciente_guardado = False
@@ -260,7 +263,7 @@ def menu_page():
     with tab3:
         mostrar_paciente()
     with tab4:
-        option = tab4.radio("Selecciona una opción para proceder con el análisis de la imágen", ("Segmentación Manual (draw)", "Segmentación Automática","Clasificador de Avance con CNN"))
+        option = tab4.radio("Selecciona una opción para proceder con el análisis de la imágen", ("Segmentación Manual (draw)", "Segmentación Automática","Clasificador Avanzado"))
         menu_results(option)
 
 

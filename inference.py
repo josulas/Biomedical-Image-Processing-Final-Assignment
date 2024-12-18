@@ -4,13 +4,13 @@ from improving.filtering import conv2d
 import cv2
 from numpy.typing import NDArray, ArrayLike
 import torch
-import torch_directml
 from torch import nn, optim
 import torch.nn.functional as functional
 
 
 MODEL_PATH = 'model.pth'
 
+PREDICTED_POWER= [100,100,100,100]
 
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, downsample=False):
@@ -105,8 +105,7 @@ class CustomResNet18(nn.Module):
 class MainModel(nn.Module):
     def __init__(self, lr=1e-3, beta1=0.9, beta2=0.999):
         super().__init__()
-        self.device = torch_directml.device()
-        self.net = CustomResNet18().to(self.device)
+        self.net = CustomResNet18()
         self.criterion = nn.CrossEntropyLoss()
         self.opt = optim.Adam(self.net.parameters(), lr=lr, betas=(beta1, beta2))
         self.input = None
@@ -117,11 +116,11 @@ class MainModel(nn.Module):
         for p in self.net.parameters():
             p.requires_grad = requires_grad
     def setup_input(self, data):
-        data = torch.tensor(data).to(self.device)
+        data = torch.tensor(data)
         self.input = data[0]
         self.target = data[1]
     def setup_input_no_label(self, data):
-        self.input = torch.tensor(data).to(self.device)
+        self.input = torch.tensor(data)
     def forward(self):
         self.prediction = self.net(self.input)
     def backward(self):
