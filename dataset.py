@@ -39,10 +39,13 @@ def get_elements_from_indexes(dataset: DatasetDict, indexes) -> list[(NDArray, i
 
 
 if __name__ == '__main__':
+    from PIL import Image
     import matplotlib.pyplot as plt
+    import os
     # Print the number of examples and the first few samples
-    dataset_dict = load_dataset(**TRAIN_DATASET)
+    dataset_dict = load_dataset(**TEST_DATASET)
     length = len(dataset_dict)
+    # Show
     n_show = 4
     sample_indexes = np.random.choice(length, n_show, replace=False)
     sample = get_elements_from_indexes(dataset_dict, sample_indexes)
@@ -54,4 +57,17 @@ if __name__ == '__main__':
     fig.suptitle('Sample Images')
     fig.tight_layout()
     fig.show()
+    # Save two of each type
+    save_path = r"interface/images_database"
+    entire_test_collection = get_elements_from_indexes(dataset_dict, np.arange(length))
+    counts = {}
+    for label in LABELS:
+        counts[label] = 0
+    for index in range(length):
+        if counts[entire_test_collection[index][1]] < 2:
+            counts[entire_test_collection[index][1]] += 1
+            filename = os.path.join(save_path, f"{LABELS[entire_test_collection[index][1]]}_{counts[entire_test_collection[index][1]]}.png")
+            Image.fromarray(entire_test_collection[index][0], "L").save(filename)
+
+
 
