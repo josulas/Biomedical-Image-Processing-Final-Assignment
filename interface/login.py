@@ -166,13 +166,15 @@ def menu_results(option):
             segmented_background = np.where(segmented_kmeans == centers[background_idx], 1, 0)
             proportion= np.round(np.sum(segmented_grey_matter)/np.sum(segmented_white_matter) , 3)
             porcentaje_gris= np.round(np.sum(segmented_grey_matter)*100/(np.sum(segmented_grey_matter)+np.sum(segmented_white_matter)) , 2)
-            
+            area_total = np.round(np.sum(segmented_grey_matter)+np.sum(segmented_white_matter)*(24*24)/(img.shape[1]*img.shape[0]),2)
 
             if ratio:
                 st.text("El resultado de la proporción materia gris/ materia blanca es:")
                 st.code(proportion, 'plaintext')
                 st.text("El porcentaje de materia gris (%) es:")
                 st.code(porcentaje_gris, 'plaintext')
+                st.text("El area total de materia gris y blanca es (cm2):")
+                st.code(area_total, 'plaintext')
 
             if k_means:
                 if 'fig_kmeans' in globals():
@@ -209,19 +211,22 @@ def menu_results(option):
                 new_path=f"{path}_mask{ext}"
                 canvas_image.save(new_path)
 
-                mascara = np.array(canvas_result.image_data[:, :, 3]) # el 3 es las transparencia
+                mascara = np.array(canvas_result.image_data[:, :, 3]) 
                 mascara_bin = np.where(mascara > 0, 255, 0).astype("uint8") 
-            
+                
             
                 image_array = np.array(image.convert("RGBA"))
                 segmentada = np.copy(image_array)
+                print(mascara_bin.shape)
+                print(f"holaaaa{image_og.size}")
+                area = (np.sum(mascara_bin)/255)*(16*24*24)/(image_array.shape[0]*image_array.shape[1]) #considerando q la imagen mide 24x24cm y la mostramos 16 veces mas grande
                 
-                segmentada[:, :, 3] = mascara_bin  # Canal Alfa de la máscara
-
+                segmentada[:, :, 3] = mascara_bin 
+                
                 # Mostrar y guardar la imagen segmentada
                 segmentada = Image.fromarray(segmentada, "RGBA")
                 st.image(segmentada, caption="Imagen segmentada", use_column_width=True)
-                #segmentada = Image.fromarray((segmentada * 255).astype("uint8"))
+                st.info(f"El area segmentada mide aproximadamente: **{area:.0f} cm2**")
                 segmentada.save(f"{path}_manualseg{ext}")
 
     elif option == "Clasificador Avanzado":
