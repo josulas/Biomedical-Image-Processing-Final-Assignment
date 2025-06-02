@@ -1,0 +1,68 @@
+# Use Python 3.11 slim image as base
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY model-service/requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Make libraries directory
+RUN mkdir -p libraries/segmentation libraries/improving libraries/common
+RUN touch libraries/__init__.py libraries/segmentation/__init__.py libraries/improving/__init__.py libraries/common/__init__.py
+
+# Copy the necessary Python files into the container
+COPY libraries/segmentation/k_means.py libraries/segmentation/
+COPY libraries/improving/filtering.py libraries/improving/
+COPY libraries/common/padding.py libraries/common/
+
+# Copy environment file
+COPY model-service/.env .
+
+# Copy the model file
+COPY model-service/model_cpu.pth model_cpu.pth
+
+# Copy the inference script and run it to get the prediction power numpy file
+COPY model-service/inference.py inference.py
+RUN python inference.py
+
+# Cpy application main script
+COPY model-service/main.py main.py
+
+# Create a non-root user for security
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose the port
+EXPOSE 8000
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Command to run the application
+CMD ["python", "main.py"]

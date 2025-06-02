@@ -1,0 +1,56 @@
+services:
+  model-service:
+    ports:
+      - "8001:8000"
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./model-service
+          target: /app
+        - action: rebuild
+          path: ./model-service/Dockerfile
+          target: /app/Dockerfile
+        - action: rebuild
+          path: ./model-service/requirements.txt
+          target: /app/requirements.txt
+        - action: rebuild
+          path : ./model-service/.env
+          target: /app/.env
+        - action: rebuild
+          path: ./model-service/model_cpu.pth
+          target: /app/model_cpu.pth 
+  backend:
+    ports:
+      - "8000:8000"
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend
+          target: /app
+        - action: rebuild
+          path: ./backend/Dockerfile
+          target: /app/Dockerfile
+        - action: rebuild
+          path: ./backend/requirements.txt
+          target: /app/requirements.txt
+        - action: rebuild
+          path : ./backend/.env
+          target: /app/.env
+  frontend:
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - STREAMLIT_SERVER_RUN_ON_SAVE=true
+      - STREAMLIT_SERVER_FILE_WATCHER_TYPE=poll
+    volumes:
+      - ./frontend:/app
+    develop:
+      watch:
+        - action: rebuild
+          path: ./frontend/Dockerfile
+          target: /app/Dockerfile
+        - action: rebuild
+          path: ./frontend/requirements.txt
+          target: /app/requirements.txt
+        - action: rebuild
+          path : ./frontend/.env
+          target: /app/.env

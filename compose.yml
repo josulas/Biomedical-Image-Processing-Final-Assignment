@@ -1,0 +1,66 @@
+services:
+  model-service:
+    build: 
+      context: .
+      dockerfile: model-service/Dockerfile
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - model-service/.env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - biomedical-net
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - biomedical-net
+    volumes:
+      - backend_data:/app/data
+      - backend_uploads:/app/uploads
+    depends_on:
+      - model-service
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - frontend/.env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]  # Fixed port
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - biomedical-net
+    depends_on:
+      - backend
+    ports:
+      - "8501:8501"
+
+volumes:
+  backend_data:
+  backend_uploads:
+
+networks:
+  biomedical-net:
+    driver: bridge
