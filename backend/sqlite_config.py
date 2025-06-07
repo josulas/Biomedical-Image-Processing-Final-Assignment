@@ -3,8 +3,10 @@
 
 import sqlite3
 import os
+import getpass
 import hashlib
 from datetime import datetime
+from datetime import timezone
 import logging
 from pathlib import Path
 
@@ -55,8 +57,8 @@ def get_db_connection():
             stat_info = data_dir.stat()
             logger.error("Directory permissions: %s", oct(stat_info.st_mode)[-3:])
             logger.error("Directory owner UID: %s", stat_info.st_uid)
-            logger.error("Current process UID: %s", os.getuid())
-        except Exception as stat_e:
+            logger.error("Current process user: %s", getpass.getuser())
+        except OSError as stat_e:
             logger.error("Could not get directory stats: %s", stat_e)
         raise
     except Exception as e:
@@ -151,7 +153,7 @@ def init_database():
             cursor.execute("""
                 INSERT INTO users (email, password_hash, role, first_name, last_name, created_at)
                 VALUES (?, ?, 'admin', 'System', 'Administrator', ?)
-            """, (ADMIN_EMAIL, hash_password(ADMIN_PASSWORD), datetime.utcnow()))
+            """, (ADMIN_EMAIL, hash_password(ADMIN_PASSWORD), datetime.now(timezone.utc)))
             # password_hash is sha256 of "password" - should be changed immediately
         conn.commit()
         logger.info("Database initialized successfully")

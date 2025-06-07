@@ -38,11 +38,11 @@ services:
           target: /app/.env
   frontend:
     environment:
-      - BACKEND_URL=http://backend:8000
       - STREAMLIT_SERVER_RUN_ON_SAVE=true
       - STREAMLIT_SERVER_FILE_WATCHER_TYPE=poll
     volumes:
       - ./frontend:/app
+      - ./libraries:/app/libraries
     develop:
       watch:
         - action: rebuild

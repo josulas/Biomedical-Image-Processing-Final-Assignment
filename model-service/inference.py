@@ -178,7 +178,7 @@ def build_and_load_model_from_state(path: str = MODEL_SD_FILE_NAME):
     Build and load the model from a saved state dictionary.
     """
     model = MainModelInference()
-    model.load_state_dict(torch.load(path, weights_only=True))
+    model.load_state_dict(torch.load(path, weights_only=True, map_location='cpu'))
     return model
 
 

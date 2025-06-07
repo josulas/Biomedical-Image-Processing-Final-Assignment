@@ -1,12 +1,20 @@
-"""FastAPI application for biomedical image classification inference."""
+"""
+FastAPI application for biomedical image classification inference.
+"""
 
 
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form
+from fastapi import (FastAPI,
+                     HTTPException,
+                     Depends,
+                     File,
+                     UploadFile,
+                     Form)
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel
@@ -107,7 +115,7 @@ async def register_user(user: UserCreate):
             user.last_name,
             user.phone,
             user.date_of_birth,
-            datetime.utcnow()
+            datetime.now(timezone.utc)
         ))
         user_id = cursor.lastrowid
         conn.commit()
@@ -213,10 +221,8 @@ async def update_profile(
             update_fields.append("date_of_birth = ?")
             values.append(profile_update["date_of_birth"])
         if update_fields:
-            # Add updated_at timestamp
             update_fields.append("updated_at = ?")
-            values.append(datetime.utcnow())
-            
+            values.append(datetime.now(timezone.utc))
             values.append(current_user["id"])
             cursor.execute(f"""
                 UPDATE users SET {', '.join(update_fields)}
@@ -256,7 +262,7 @@ async def change_password(
             WHERE id = ?
         """, (
             password_data["new_password"],
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
             current_user["id"]
         ))
         conn.commit()
@@ -336,7 +342,10 @@ async def assign_patient_to_neurologist(
         cursor.execute("""
             INSERT INTO patient_assignments (patient_id, neurologist_id, assigned_by, assigned_at)
             VALUES (?, ?, ?, ?)
-        """, (patient_id, assignment.neurologist_id, current_user["id"], datetime.utcnow()))
+        """, (patient_id,
+              assignment.neurologist_id,
+              current_user["id"],
+              datetime.now(timezone.utc)))
         conn.commit()
         return {"message": "Patient assigned successfully"}
     except HTTPException:
@@ -382,21 +391,15 @@ async def self_assign_to_neurologist(
 ):
     """Patient self-assigns to neurologist."""
     require_role(current_user, ["patient"])
-    
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
-        # Check if assignment already exists
         cursor.execute("""
             SELECT id FROM patient_assignments 
             WHERE patient_id = ? AND neurologist_id = ? AND is_active = 1
         """, (current_user["id"], assignment_data["neurologist_id"]))
-        
         if cursor.fetchone():
             return {"message": "Already assigned to this neurologist"}
-        
-        # Create assignment
         cursor.execute("""
             INSERT INTO patient_assignments (patient_id, neurologist_id, assigned_by, assigned_at)
             VALUES (?, ?, ?, ?)
@@ -404,12 +407,12 @@ async def self_assign_to_neurologist(
             current_user["id"],
             assignment_data["neurologist_id"],
             current_user["id"],  # Self-assigned
-            datetime.utcnow()
+            datetime.now(timezone.utc)
         ))
-        
         conn.commit()
         return {"message": "Self-assigned successfully"}
-        
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
         logger.error("Self-assignment error: %s", str(e))
@@ -421,7 +424,6 @@ async def self_assign_to_neurologist(
 async def get_my_study_results(current_user: dict = Depends(get_current_user)):
     """Get current user's study results."""
     require_role(current_user, ["patient"])
-    
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -436,7 +438,6 @@ async def get_my_study_results(current_user: dict = Depends(get_current_user)):
             WHERE sr.patient_id = ?
             ORDER BY sr.created_at DESC
         """, (current_user["id"],))
-        
         results = []
         for row in cursor.fetchall():
             results.append({
@@ -462,46 +463,36 @@ async def delete_image(
 ):
     """Delete uploaded image (if no results exist)."""
     require_role(current_user, ["patient", "admin"])
-    
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
-        # Check if image belongs to user (patients can only delete their own)
         if current_user["role"] == "patient":
             cursor.execute("""
                 SELECT file_path FROM medical_images 
                 WHERE id = ? AND patient_id = ?
             """, (image_id, current_user["id"]))
-        else:  # Admin can delete any image
+        else:
             cursor.execute("""
                 SELECT file_path FROM medical_images 
                 WHERE id = ?
             """, (image_id,))
-        
         image_data = cursor.fetchone()
         if not image_data:
             raise HTTPException(status_code=404, detail="Image not found")
-        
         # Check if results exist
         cursor.execute("""
             SELECT id FROM study_results WHERE image_id = ?
         """, (image_id,))
-        
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Cannot delete image with existing results")
-        
         # Delete from database
         cursor.execute("DELETE FROM medical_images WHERE id = ?", (image_id,))
-        
         # Delete physical file
         file_path = Path(image_data[0])
         if file_path.exists():
             file_path.unlink()
-        
         conn.commit()
         return {"message": "Image deleted successfully"}
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -510,7 +501,7 @@ async def delete_image(
         raise HTTPException(status_code=500, detail="Image deletion failed") from e
     finally:
         conn.close()
-        
+
 @app.put("/images/{image_id}/assign")
 async def update_image_assignment(
     image_id: int,
@@ -519,28 +510,23 @@ async def update_image_assignment(
 ):
     """Update image assignment (if no results exist)."""
     require_role(current_user, ["patient"])
-    
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
         # Verify image ownership
         cursor.execute("""
             SELECT id FROM medical_images 
             WHERE id = ? AND patient_id = ?
         """, (image_id, current_user["id"]))
-        
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Image not found")
-        
         # Check if results exist
         cursor.execute("""
             SELECT id FROM study_results WHERE image_id = ?
         """, (image_id,))
-        
         if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Cannot reassign image with existing results")
-        
+            raise HTTPException(status_code=400,
+                                detail="Cannot reassign image with existing results")
         # Update assignment
         cursor.execute("""
             UPDATE patient_assignments 
@@ -548,13 +534,11 @@ async def update_image_assignment(
             WHERE patient_id = ? AND is_active = 1
         """, (
             assignment_data["neurologist_id"],
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
             current_user["id"]
         ))
-        
         conn.commit()
         return {"message": "Assignment updated successfully"}
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -572,11 +556,9 @@ async def upload_image(
     current_user: dict = Depends(get_current_user)
 ):
     """Upload medical image."""
-    # Validate file type
-    if not file.content_type.startswith("image/"):
+    if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
-    # Generate unique filename
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"{current_user['id']}_{timestamp}_{file.filename}"
     file_path = UPLOAD_DIR / filename
     conn = get_db_connection()
@@ -585,11 +567,9 @@ async def upload_image(
     logger.info("Current user: %s", current_user)
     logger.info("Study name: %s", study_name)
     try:
-        # Save file
         async with aiofiles.open(file_path, 'wb') as f:
             content = await file.read()
             await f.write(content)
-        # Save to database
         cursor.execute("""
             INSERT INTO medical_images (patient_id, filename, original_filename, 
                                       file_path, study_name, uploaded_at)
@@ -604,12 +584,14 @@ async def upload_image(
         ))
         image_id = cursor.lastrowid
         conn.commit()
+        if image_id is None:
+            raise HTTPException(status_code=500, detail="Failed to save image")
         return ImageResponse(
             id=image_id,
             filename=filename,
-            original_filename=file.filename,
+            original_filename=file.filename or "",
             study_name=study_name,
-            uploaded_at=datetime.utcnow()
+            uploaded_at=datetime.now(timezone.utc)
         )
     except Exception as e:
         conn.rollback()
@@ -686,7 +668,7 @@ async def save_study_result(
         raise
     except Exception as e:
         conn.rollback()
-        logger.error("Save result error: ", str(e))
+        logger.error("Save result error: %s", str(e))
         raise HTTPException(status_code=500, detail="Failed to save result") from e
     finally:
         conn.close()
@@ -743,6 +725,106 @@ async def get_study_results(
     finally:
         conn.close()
 
+# Neurologist endpoints
+
+@app.get("/patients/{patient_id}/images")
+async def get_patient_images(
+    patient_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get images for a specific patient (neurologist access)."""
+    require_role(current_user, ["neurologist", "admin"])
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify neurologist has access to this patient
+        if current_user["role"] == "neurologist":
+            cursor.execute("""
+                SELECT 1 FROM patient_assignments 
+                WHERE patient_id = ? AND neurologist_id = ? AND is_active = 1
+            """, (patient_id, current_user["id"]))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=403, detail="Access denied to this patient")
+        # Get patient's images
+        cursor.execute("""
+            SELECT id, filename, original_filename, study_name, uploaded_at
+            FROM medical_images 
+            WHERE patient_id = ?
+            ORDER BY uploaded_at DESC
+        """, (patient_id,))
+        images = []
+        for row in cursor.fetchall():
+            images.append({
+                "id": row[0],
+                "filename": row[1],
+                "original_filename": row[2],
+                "study_name": row[3],
+                "uploaded_at": row[4]
+            })
+        return images
+    finally:
+        conn.close()
+
+@app.get("/images/{image_id}/results")
+async def get_image_results(
+    image_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get results for a specific image."""
+    require_role(current_user, ["neurologist", "admin", "patient"])
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT sr.classification_result, sr.confidence_score, sr.notes, 
+                   sr.segmentation_data, sr.created_at
+            FROM study_results sr
+            WHERE sr.image_id = ?
+            ORDER BY sr.created_at DESC
+            LIMIT 1
+        """, (image_id,))
+        result = cursor.fetchone()
+        if result:
+            return {
+                "classification_result": result[0],
+                "confidence_score": result[1],
+                "notes": result[2],
+                "segmentation_data": result[3],
+                "created_at": result[4]
+            }
+        else:
+            raise HTTPException(status_code=404, detail="No results found for this image")
+    finally:
+        conn.close()
+
+@app.get("/images/{image_id}/download")
+async def download_image(
+    image_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Download image file."""
+    require_role(current_user, ["neurologist", "admin", "patient"])
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT file_path, original_filename FROM medical_images 
+            WHERE id = ?
+        """, (image_id,))
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="Image not found")
+        file_path, original_filename = result
+        if not Path(file_path).exists():
+            raise HTTPException(status_code=404, detail="Image file not found on disk")
+        return FileResponse(
+            file_path,
+            media_type="image/jpeg",
+            filename=original_filename
+        )
+    finally:
+        conn.close()
+
 # Admin endpoints
 @app.get("/admin/users", response_model=list[UserResponse])
 async def get_all_users(current_user: dict = Depends(get_current_user)):
@@ -776,7 +858,7 @@ async def update_user(
 ):
     """Update user (admin only)."""
     require_role(current_user, ["admin"])
-        # Prevent admin from editing their own account
+    # Prevent admin from editing their own account
     if user_id == current_user["id"]:
         raise HTTPException(
             status_code=403,
@@ -828,16 +910,13 @@ async def create_user_admin(
 ):
     """Create user (admin only)."""
     require_role(current_user, ["admin"])
-    
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
         # Check if email already exists
         cursor.execute("SELECT id FROM users WHERE email = ?", (user_data["email"],))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="User with this email already exists")
-        
         # Create user
         cursor.execute("""
             INSERT INTO users (email, password_hash, role, first_name, last_name, 
@@ -854,10 +933,8 @@ async def create_user_admin(
             datetime.utcnow(),
             user_data.get("is_active", True)
         ))
-        
         user_id = cursor.lastrowid
         conn.commit()
-        
         # Return created user
         cursor.execute("""
             SELECT id, email, role, first_name, last_name, phone, 
@@ -865,13 +942,11 @@ async def create_user_admin(
             FROM users WHERE id = ?
         """, (user_id,))
         user_row = cursor.fetchone()
-        
         return UserResponse(
             id=user_row[0], email=user_row[1], role=user_row[2],
             first_name=user_row[3], last_name=user_row[4], phone=user_row[5],
             date_of_birth=user_row[6], created_at=user_row[7], is_active=user_row[8]
         )
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -885,10 +960,8 @@ async def create_user_admin(
 async def get_assignments(current_user: dict = Depends(get_current_user)):
     """Get all patient assignments (admin only)."""
     require_role(current_user, ["admin"])
-    
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
         cursor.execute("""
             SELECT pa.id, pa.patient_id, pa.neurologist_id, pa.assigned_at, pa.is_active,
@@ -899,7 +972,6 @@ async def get_assignments(current_user: dict = Depends(get_current_user)):
             JOIN users n ON pa.neurologist_id = n.id
             ORDER BY pa.assigned_at DESC
         """)
-        
         assignments = []
         for row in cursor.fetchall():
             assignments.append({
@@ -911,9 +983,7 @@ async def get_assignments(current_user: dict = Depends(get_current_user)):
                 "patient_name": f"{row[5]} {row[6]}",
                 "neurologist_name": f"{row[7]} {row[8]}"
             })
-        
         return assignments
-        
     finally:
         conn.close()
 
@@ -924,20 +994,16 @@ async def create_assignment_admin(
 ):
     """Create patient assignment (admin only)."""
     require_role(current_user, ["admin"])
-    
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
         # Check if assignment already exists
         cursor.execute("""
             SELECT id FROM patient_assignments 
             WHERE patient_id = ? AND neurologist_id = ? AND is_active = 1
         """, (assignment_data["patient_id"], assignment_data["neurologist_id"]))
-        
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Assignment already exists")
-        
         # Create assignment
         cursor.execute("""
             INSERT INTO patient_assignments (patient_id, neurologist_id, assigned_by, assigned_at)
@@ -946,12 +1012,10 @@ async def create_assignment_admin(
             assignment_data["patient_id"],
             assignment_data["neurologist_id"],
             current_user["id"],
-            datetime.utcnow()
+            datetime.now(timezone.utc)
         ))
-        
         conn.commit()
         return {"message": "Assignment created successfully"}
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -969,10 +1033,8 @@ async def update_assignment_admin(
 ):
     """Update patient assignment (admin only)."""
     require_role(current_user, ["admin"])
-    
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
         # If neurologist is being changed, delete study results
         if assignment_data.get("delete_study_results", False):
@@ -984,29 +1046,23 @@ async def update_assignment_admin(
                     WHERE pa.id = ?
                 )
             """, (assignment_id,))
-        
         # Update assignment
         update_fields = []
         values = []
-        
         if "neurologist_id" in assignment_data:
             update_fields.append("neurologist_id = ?")
             values.append(assignment_data["neurologist_id"])
-        
         if "is_active" in assignment_data:
             update_fields.append("is_active = ?")
             values.append(assignment_data["is_active"])
-        
         if update_fields:
             values.append(assignment_id)
             cursor.execute(f"""
                 UPDATE patient_assignments SET {', '.join(update_fields)}
                 WHERE id = ?
             """, values)
-        
         conn.commit()
         return {"message": "Assignment updated successfully"}
-        
     except Exception as e:
         conn.rollback()
         logger.error("Assignment update error: %s", str(e))
@@ -1021,10 +1077,8 @@ async def delete_assignment_admin(
 ):
     """Delete patient assignment (admin only)."""
     require_role(current_user, ["admin"])
-    
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
         # Delete study results for this assignment
         cursor.execute("""
@@ -1035,16 +1089,12 @@ async def delete_assignment_admin(
                 WHERE pa.id = ?
             )
         """, (assignment_id,))
-        
         # Delete assignment
         cursor.execute("DELETE FROM patient_assignments WHERE id = ?", (assignment_id,))
-        
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Assignment not found")
-        
         conn.commit()
         return {"message": "Assignment deleted successfully"}
-        
     except HTTPException:
         raise
     except Exception as e:

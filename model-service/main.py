@@ -9,6 +9,7 @@ import logging
 
 import numpy as np
 from PIL import Image
+import cv2
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -16,6 +17,9 @@ import uvicorn
 
 from inference import (build_and_load_model_from_state,
                        pre_process_image, predict,
+                       load_dataset,
+                       get_elements_from_indexes,
+                       TEST_DATASET,
                        LABELS,
                        PREDICTION_POWER_FILE_NAME
 )
@@ -61,6 +65,7 @@ def load_model():
     global MODEL
     try:
         MODEL = build_and_load_model_from_state('model_cpu.pth')
+        MODEL.eval()
         logger.info("Model loaded successfully")
         return True
     except Exception as e:
@@ -156,11 +161,15 @@ async def predict_image(request: ImageRequest):
     try:
         # Decode image
         image_array = decode_base64_image(request.image)
+        # Log the image
+        logger.info("Received image of shape: %s", image_array.shape)
         # Preprocess image
         processed_image = pre_process_image(image_array)
+        logger.info("Processed image shape: %s", processed_image.shape)
         # Make prediction
         prediction_result = predict(MODEL, processed_image)
-        # Get prediction (single value)
+        logger.info("Prediction result: %s", prediction_result)
+        # Get prediction (single value)l
         if isinstance(prediction_result, np.ndarray):
             predicted_class = int(prediction_result[0])
         else:

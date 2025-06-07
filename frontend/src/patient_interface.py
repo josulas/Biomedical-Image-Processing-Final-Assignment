@@ -2,6 +2,7 @@
 
 
 from typing import Dict
+import time
 
 import streamlit as st
 
@@ -98,6 +99,7 @@ class PatientInterface:
                             if assignment_result["success"]:
                                 st.success(f"✅ Image uploaded successfully and assigned to Dr. {selected_neurologist['first_name']} {selected_neurologist['last_name']}!")
                                 st.balloons()
+                                time.sleep(2)  # Short delay for balloons effect
                                 st.rerun()
                             else:
                                 st.warning(f"⚠️ Image uploaded but assignment failed: {assignment_result.get('error', 'Unknown error')}")
@@ -183,14 +185,15 @@ class PatientInterface:
                     st.markdown("**Neurologist's Notes**")
                     st.write(result['notes'])
                 
-                # Download/view options
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    if st.button("📄 View Full Report", key=f"view_{result['id']}"):
-                        st.info("Full report viewing feature - to be implemented")
-                with col_b:
-                    if st.button("📧 Share with Doctor", key=f"share_{result['id']}"):
-                        st.info("Share functionality - to be implemented")
+                # TODO
+                # # Download/view options
+                # col_a, col_b = st.columns(2)
+                # with col_a:
+                #     if st.button("📄 View Full Report", key=f"view_{result['id']}"):
+                #         st.info("Full report viewing feature - to be implemented")
+                # with col_b:
+                #     if st.button("📧 Share with Doctor", key=f"share_{result['id']}"):
+                #         st.info("Share functionality - to be implemented")
     
     def show_manage_images(self):
         """Main manage images page."""
@@ -325,6 +328,7 @@ class PatientInterface:
                                     result = self.api_client.update_image_assignment(image['id'], new_neurologist['id'])
                                     if result["success"]:
                                         st.success("✅ Reassigned successfully!")
+                                        time.sleep(2)
                                         st.rerun()
                                     else:
                                         st.error(f"❌ Reassignment failed: {result.get('error', 'Unknown error')}")
@@ -351,6 +355,7 @@ class PatientInterface:
                                                 # Clear confirmation state
                                                 if delete_key in st.session_state:
                                                     del st.session_state[delete_key]
+                                                time.sleep(2)  # Short delay for effect
                                                 st.rerun()
                                             else:
                                                 st.error(f"❌ Delete failed: {result.get('error', 'Unknown error')}")
